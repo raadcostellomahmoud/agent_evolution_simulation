@@ -5,11 +5,24 @@ using Agents
 using Colors
 using ColorSchemes
 
+N_PREY::Int64=10
+N_STEPS::Int64 = 100  # Number of steps to run simulation for
+N_PREDATORS::Int64=1
+N_RESOURCES::Int64=30
+X_EXTENT::Int64=100
+Y_EXTENT::Int64=100
+Z_EXTENT::Int64=100
+
+μ_resource_energy::Float64=10.0
+
+INITIAL_PREY_ENERGY::Int64=20
+INITIAL_PREDATOR_ENERGY::Int64=20
+
 # Define the agent type using the correct syntax
 @agent struct Organism3D(ContinuousAgent{3,Float64})
     species::Symbol
     energy::Float64
-    genome::Vector{Float64} #[speed, sensing_range, energy_efficiency]
+    genome::Vector{Float64} #[speed, sensing_range, energy_efficiency, consumption_range]
 end
 
 # Define genetic traits and mutation
@@ -25,19 +38,14 @@ function mutate_genome(genome, mutation_rate=1.)
 end
 
 # Initialize model with both species
-function initialize_model(;
-    n_prey::Int64=10,
-    n_predators::Int64 = 0,
-    n_resources::Int64=30,
-    extent = (100.0, 100.0, 100.0)
-)
-    space = ContinuousSpace(extent)
+function initialize_model()
+    space = ContinuousSpace((X_EXTENT, Y_EXTENT, Z_EXTENT))
     properties = Dict()
     model = AgentBasedModel(Organism3D, space; properties = properties)
     
     # Initialize prey
-    for _ in 1:n_prey
-        pos = Tuple(50 .+rand(3) .* 20)
+    for _ in 1:N_PREY
+        pos = Tuple(50 .+ rand(3) .* 20)
         vel = Tuple(randn(3))
 
         # Genome: [speed, sensing_range, energy_efficiency, consumption_range]
@@ -47,14 +55,14 @@ function initialize_model(;
             model,
             vel,
             :prey,
-            20,  # initial energy
+            INITIAL_PREY_ENERGY,  # initial prey energy
             genome
         )
     end
     
     # Initialize predators
-    for _ in 1:n_predators
-        pos::Tuple{Float32, Float32, Float32}=Tuple(rand(3) .* extent)
+    for _ in 1:N_PREDATORS
+        pos::Tuple{Float32, Float32, Float32}=Tuple(rand(3) .* (X_EXTENT,Y_EXTENT,Z_EXTENT))
         vel::Tuple{Float32, Float32, Float32}=0.001 .*Tuple(randn(3))
 
         # Genome: [speed, sensing_range, energy_efficiency, consumption_range]
@@ -64,15 +72,15 @@ function initialize_model(;
             model,
             vel,
             :predator,
-            20,  # initial energy
+            INITIAL_PREDATOR_ENERGY,  # initial energy
             genome
         )
     end
 
     # Initialize resource pools
     resources = []
-    for _ in 1:n_resources
-        pos = [rand(3) .* spacesize(model)..., rand()*10.0]
+    for _ in 1:N_RESOURCES
+        pos = [rand(3) .* spacesize(model)..., rand()*μ_resource_energy]
         push!(resources, pos)
     end
 
@@ -83,9 +91,20 @@ model, resources = initialize_model()
 
 # The ability to sense nearby prey (for predators) or resources and predators (for prey)
 function sense_nearby!(agent, model)
-    sensing_range = agent.genome[2]
-    nearby = nearby_agents(agent, model, sensing_range)
-    return nearby
+    nearby = Vector{Union{Organism3D, Nothing}}(nothing, 5)
+    count = 1
+    for other_agent in allagents(model)
+        if count <= length(nearby)
+            if agent != other_agent
+                if norm(agent.pos .- other_agent.pos) <= agent.genome[2]
+                    nearby[count] = other_agent
+                    count += 1
+                end
+            end
+        end
+    end
+    filtered_nearby = filter(!isnothing, nearby[1:max(1, count-1)])
+    return filtered_nearby
 end
 
 # Movement and behavior functions
@@ -281,8 +300,7 @@ function make_vid(fig)
     ylims!(ax, 0, 100)
     zlims!(ax, 0, 100)
     # Record animation
-    frames = 2000  # Number of steps to animate
-    record(fig, "simulation.mp4", 1:frames, framerate=30,) do frame_number
+    record(fig, "simulation.mp4", 1:N_STEPS, framerate=30,) do frame_number
         step!(model, agent_step!, model_step!)  # Simulate one step of the model
         update_plot!(ax, model, resources, frame_number)
         print("Step: ", frame_number, "\n")
