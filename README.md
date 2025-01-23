@@ -2,6 +2,8 @@
 
 This repository contains a simulation of a 3D ecosystem where prey, predators, and resources interact. The simulation uses the **Agents.jl** package for agent-based modeling and **CairoMakie.jl** for visualization. Organisms evolve through mutation and reproduction, and their behavior is determined by their genome, energy levels, and surroundings.
 
+https://github.com/user-attachments/assets/7ce48cc1-f558-4f8d-b3a9-30970fbabd6b
+
 ## Features
 - **Organism Types**: Prey and predators with unique traits (speed, sensing range, energy efficiency).
 - **Resources**: Energy sources that prey can consume.
