@@ -249,7 +249,7 @@ function get_resource_color()
 end
 
 # Draw resources with improved color
-function draw_resources!(resources::Vector{Vector{Float64}})
+function draw_resources!(resources::Vector{Any})
     for resource in resources
         scatter!(ax, [resource[1]], [resource[2]], [resource[3]], color=get_resource_color(), markersize=10, marker=:hexagon)
     end
@@ -281,7 +281,7 @@ function make_vid(fig)
     ylims!(ax, 0, 100)
     zlims!(ax, 0, 100)
     # Record animation
-    frames = 10000  # Number of steps to animate
+    frames = 2000  # Number of steps to animate
     record(fig, "simulation.mp4", 1:frames, framerate=30,) do frame_number
         step!(model, agent_step!, model_step!)  # Simulate one step of the model
         update_plot!(ax, model, resources, frame_number)
