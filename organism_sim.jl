@@ -13,6 +13,7 @@ N_RESOURCES::Int64 = 50
 EXTENT::Int64 = 100
 
 μ_RESOURCE_ENERGY::Float64 = 15.0
+REPRODUCTION_PROXIMITY::Int64 = 3
 
 INITIAL_PREY_ENERGY::Int64 = 20
 INITIAL_PREDATOR_ENERGY::Int64 = 20
@@ -115,20 +116,30 @@ function predator_behavior!(agent, model)
 end
 
 
-function reproduce!(agent, model)
-    agent.energy /= 2  # Split energy with offspring
+function reproduce!(parent1, parent2, model)
+    # Ensure both parents have enough energy to reproduce
+    if parent1.energy < REPRODUCTION_ENERGY_THRESHOLD || parent2.energy < REPRODUCTION_ENERGY_THRESHOLD
+        return
+    end
 
-    # Create offspring with mutated genome
-    pos = ntuple(i -> clamp(agent.pos[i] + randn(), 0, EXTENT), 3)
+    # Split energy between parents
+    parent1.energy /= 2
+    parent2.energy /= 2
+
+    # Create offspring position and velocity
+    pos = ntuple(i -> clamp((parent1.pos[i] + parent2.pos[i]) / 2 + randn(), 0, EXTENT), 3)
     vel = Tuple(randn(3))
-    new_genome = mutate_genome(agent.genome)
+
+    # Mix genomes of both parents and apply mutation
+    mixed_genome = (parent1.genome .+ parent2.genome) ./ 2
+    new_genome = mutate_genome(mixed_genome)
 
     add_agent!(
         pos,
         model,
         vel,
-        agent.species,
-        agent.energy,
+        parent1.species,  # Assuming offspring inherits species from parent1
+        parent1.energy,   # Offspring inherits energy from parent1
         new_genome
     )
 end
@@ -170,11 +181,13 @@ function agent_step!(agent, model)
 
     agent.energy -= speed^2 / agent.genome[3]
     
-
-
-    # Handle reproduction
-    if agent.energy >= REPRODUCTION_ENERGY_THRESHOLD  # Energy threshold for reproduction
-        reproduce!(agent, model)
+    # Handle reproduction with nearby agents
+    near_agents = nearby_agents(agent, model, REPRODUCTION_PROXIMITY)  # Function to find nearby agents
+    for other_agent in near_agents
+        if other_agent.species == agent.species && other_agent != agent
+            reproduce!(agent, other_agent, model)
+            break  # Only reproduce with one nearby agent per step
+        end
     end
 
     # Handle predation
@@ -370,7 +383,7 @@ function make_vid(fig)
     zlims!(ax, 0, EXTENT)
 
     # Record animation
-    record(fig, "simulation.mp4", 1:N_STEPS, framerate=30,) do frame_number
+    record(fig, "simulation_with_sexual_reproduction.mp4", 1:N_STEPS, framerate=30,) do frame_number
         step!(model, agent_step!, model_step!)  # Simulate one step of the model
 
         # Update predator-prey counts
