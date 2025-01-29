@@ -5,14 +5,14 @@ using Agents
 using Colors
 using ColorSchemes
 
-N_STEPS::Int64 = 5000  # Number of steps to run simulation for
+N_STEPS::Int64 = 10000  # Number of steps to run simulation for
 
 N_PREY::Int64 = 100
-N_PREDATORS::Int64 = 4
-N_RESOURCES::Int64 = 30
+N_PREDATORS::Int64 = 3
+N_RESOURCES::Int64 = 50
 EXTENT::Int64 = 100
 
-μ_RESOURCE_ENERGY::Float64 = 10.0
+μ_RESOURCE_ENERGY::Float64 = 15.0
 
 INITIAL_PREY_ENERGY::Int64 = 20
 INITIAL_PREDATOR_ENERGY::Int64 = 20
@@ -37,7 +37,7 @@ function initialize_resources()
     # Initialize resource pools
     resources = []
     for _ in 1:N_RESOURCES
-        pos = [rand(3) .* spacesize(model)..., rand() * μ_RESOURCE_ENERGY]
+        pos = [rand(3) .* EXTENT; rand() * μ_RESOURCE_ENERGY]
         push!(resources, pos)
     end
     return resources
@@ -73,11 +73,11 @@ function sense_nearby!(agent, model)
     return nearby
 end
 
-function prey_behavior!(agent, model, resources)
+function prey_behavior!(agent, model)
     # Prey-specific logic (resource finding, avoiding predators)
     speed = agent.genome[1]
     direction = zeros(3)
-    for predator in sense_nearby(agent, model)
+    for predator in sense_nearby!(agent, model)
         if typeof(predator) == Organism3D
             if predator.species == :predator
                 direction = normalize(agent.pos .- predator.pos)
@@ -103,7 +103,7 @@ function predator_behavior!(agent, model)
     # Predator-specific logic (hunting prey)
     direction = zeros(3)
     speed = agent.genome[1]
-    for prey in sense_nearby(agent, model)
+    for prey in sense_nearby!(agent, model)
         if typeof(prey) == Organism3D && prey.species == :prey
             direction += normalize(prey.pos .- agent.pos)
             if norm(direction) < speed
@@ -147,14 +147,30 @@ function hunt!(predator, model)
 end
 
 function agent_step!(agent, model)
-    direction, speed = agent.species == :prey ? prey_behavior!(agent, model, resources) : predator_behavior!(agent, model)
+    direction, speed = agent.species == :prey ? prey_behavior!(agent, model) : predator_behavior!(agent, model)
     if norm(direction) > 0
         agent.vel = normalize(direction)
     elseif rand() < RANDOM_WALK_CHANCE
         agent.vel = normalize(randn(3))
     end
+
+    proposed_pos = ntuple(i -> clamp(agent.pos[i] .+ agent.vel[i] * speed, 0, EXTENT), 3)
+
+    # Boundary behavior: reflect direction if at boundary
+    newvel = Vector(agent.vel)
+    for i in 1:3
+        if proposed_pos[i] <=0 || proposed_pos[i] >= EXTENT
+            newvel[i] *= -1  # Reverse velocity component
+        end
+    end
+    agent.vel = SVector(newvel...)
+
+    new_pos = ntuple(i -> clamp(agent.pos[i] .+ agent.vel[i] * speed, 0., EXTENT), 3)
+    move_agent!(agent, new_pos, model)
+
     agent.energy -= speed^2 / agent.genome[3]
-    move_agent!(agent, mod.(agent.pos + agent.vel * speed, EXTENT), model)
+    
+
 
     # Handle reproduction
     if agent.energy >= REPRODUCTION_ENERGY_THRESHOLD  # Energy threshold for reproduction
@@ -344,7 +360,7 @@ legend = Legend(gc[1,1],
                [LineElement(color=:red), LineElement(color=:green)],
                ["Predators", "Prey"],
                "Population Types",
-               bgcolor=:white,
+               backgroundcolor=:white,
                padding=(10, 10, 10, 10))
 
 # Now, both axes should have equal dimensions
